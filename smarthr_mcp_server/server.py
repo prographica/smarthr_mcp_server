@@ -2,10 +2,11 @@ import os
 import json
 import logging
 from dotenv import load_dotenv
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from pydantic import BaseModel, ValidationError
 from typing import Optional, List, Dict, Any
 
+from smarthr_mcp_server.auth import build_google_auth, DomainRestrictionMiddleware
 from smarthr_mcp_server.smarthr_client import (
     SmartHRClient,
     CrewCreateRequest,
@@ -31,11 +32,16 @@ from smarthr_mcp_server.smarthr_client import (
 )
 
 load_dotenv()
-smarthr_client = SmartHRClient()
-mcp = FastMCP("SmartHR")
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("smarthr-mcp-server")
+
+smarthr_client = SmartHRClient()
+
+# Google OAuth (claude.ai リモートコネクタ向け)。DISABLE_AUTH=1 で無効化可。
+_auth_provider = build_google_auth()
+mcp = FastMCP("SmartHR", auth=_auth_provider)
+# 認証済みユーザーを社内ドメインに限定
+mcp.add_middleware(DomainRestrictionMiddleware())
 
 # --------------------
 # TOOL: create_crew
@@ -82,11 +88,35 @@ def smarthr_update_crew(crew_id: str, data: dict) -> dict:
 # TOOL: list_crews
 # --------------------
 @mcp.tool()
-def smarthr_list_crews(page: int = 1, per_page: int = 10, **kwargs) -> dict:
+def smarthr_list_crews(
+    page: int = 1,
+    per_page: int = 10,
+    emp_code: Optional[str] = None,
+    employment_type_id: Optional[str] = None,
+    department_id: Optional[str] = None,
+    entered_at_from: Optional[str] = None,
+    entered_at_to: Optional[str] = None,
+) -> dict:
     """
     従業員のリストを取得します。
+
+    Args:
+        page: ページ番号
+        per_page: 1ページあたりの件数
+        emp_code: 社員番号での絞り込み
+        employment_type_id: 雇用形態IDでの絞り込み
+        department_id: 部署IDでの絞り込み
+        entered_at_from / entered_at_to: 入社日の範囲 (YYYY-MM-DD)
     """
-    return smarthr_client.list_crews(page=page, per_page=per_page, **kwargs)
+    filters = {
+        "emp_code": emp_code,
+        "employment_type_id": employment_type_id,
+        "department_id": department_id,
+        "entered_at_from": entered_at_from,
+        "entered_at_to": entered_at_to,
+    }
+    filters = {k: v for k, v in filters.items() if v is not None}
+    return smarthr_client.list_crews(page=page, per_page=per_page, **filters)
 
 # --------------------
 # TOOL: search_crews
@@ -688,7 +718,7 @@ def smarthr_delete_job_category(job_category_id: str) -> None:
 # TOOL: list_dependents
 # --------------------
 @mcp.tool()
-def smarthr_list_dependents(crew_id: str, page: int = 1, per_page: int = 10, **kwargs: Any) -> Dict[str, Any]:
+def smarthr_list_dependents(crew_id: str, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
     """
     指定した従業員の家族情報のリストを取得します。
 
@@ -700,8 +730,7 @@ def smarthr_list_dependents(crew_id: str, page: int = 1, per_page: int = 10, **k
     Returns:
         Dict[str, Any]: 家族情報のリスト
     """
-    kwargs = kwargs or {}
-    return smarthr_client.list_dependents(crew_id, page=page, per_page=per_page, **kwargs)
+    return smarthr_client.list_dependents(crew_id, page=page, per_page=per_page)
 
 # --------------------
 # TOOL: create_dependent

@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.log
+.env
+.env.*
+.DS_Store
+.claude
+README.md
+LICENSE
+uv.lock
+*.egg-info
+.vscode
+tests
