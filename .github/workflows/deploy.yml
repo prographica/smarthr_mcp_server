@@ -1,0 +1,53 @@
+name: Deploy to Cloud Run
+
+# main への push で Cloud Run へ自動デプロイする。
+# 認証は Workload Identity Federation (鍵レス)。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# WIF の OIDC トークン発行に id-token: write が必須
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: isc-grant-agents
+  REGION: asia-northeast1
+  SERVICE: smarthr-mcp-server
+  # 非機密の設定値 (機密は Secret Manager 参照)
+  SMARTHR_API_BASE_URL: https://isc-inc.smarthr.jp/api
+  GOOGLE_OAUTH_CLIENT_ID: 64005751512-28o21m4oufop2i1avlvlpcr8rfcenh6t.apps.googleusercontent.com
+  PUBLIC_BASE_URL: https://smarthr-mcp-server-64005751512.asia-northeast1.run.app
+  ALLOWED_GOOGLE_EMAILS: akiyuki.nomura@innovative-space-carrier.co.jp
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: projects/64005751512/locations/global/workloadIdentityPools/github-pool/providers/smarthr-mcp-provider
+          service_account: github-deployer@isc-grant-agents.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --source . \
+            --region "$REGION" \
+            --project "$PROJECT_ID" \
+            --allow-unauthenticated \
+            --set-env-vars "SMARTHR_API_BASE_URL=${SMARTHR_API_BASE_URL},GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID},PUBLIC_BASE_URL=${PUBLIC_BASE_URL},ALLOWED_GOOGLE_EMAILS=${ALLOWED_GOOGLE_EMAILS}" \
+            --set-secrets "SMARTHR_API_KEY=smarthr-mcp-api-token:latest,GOOGLE_OAUTH_CLIENT_SECRET=smarthr-mcp-google-oauth-client-secret:latest" \
+            --min-instances 0 \
+            --port 8080 \
+            --quiet
