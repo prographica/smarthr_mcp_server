@@ -48,6 +48,7 @@ jobs:
             --allow-unauthenticated \
             --set-env-vars "SMARTHR_API_BASE_URL=${SMARTHR_API_BASE_URL},GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID},PUBLIC_BASE_URL=${PUBLIC_BASE_URL},ALLOWED_GOOGLE_EMAILS=${ALLOWED_GOOGLE_EMAILS}" \
             --set-secrets "SMARTHR_API_KEY=smarthr-mcp-api-token:latest,GOOGLE_OAUTH_CLIENT_SECRET=smarthr-mcp-google-oauth-client-secret:latest" \
-            --min-instances 0 \
+            --min-instances 1 \
+            --max-instances 1 \
             --port 8080 \
             --quiet
